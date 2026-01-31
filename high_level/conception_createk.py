@@ -9,16 +9,18 @@ from ultralytics import YOLO
 # ----------------------------
 # Configuration
 # ----------------------------
-MODEL_PATH = "yolov8n.pt"  # pretrained YOLOv8 (COCO)
+# pretrained YOLOv8 (COCO)
+MODEL_PATH = r"C:\Users\Edouard\Documents\Documents\Personnel\Projets_Perso_Studio\Createk_Defi_Conception\runs\detect\train8\weights\best.pt"
 SERIAL_PORT = "COM6"        # e.g. COM6 on Windows, /dev/ttyACM0 on Linux
 BAUDRATE = 115200
 
 H_FOV_DEG = 70.0   # horizontal field of view of camera
 V_FOV_DEG = 45.0   # vertical field of view of camera
 
-CONFIDENCE_THRESHOLD = 0.4  # minimum detection confidence
+CONFIDENCE_THRESHOLD = 0.7  # minimum detection confidence
 MAX_WATCHDOG_FAILURES = 3   # number of consecutive failures before restart
 ARDUINO_RECONNECT_INTERVAL = 5.0  # seconds between reconnection attempts
+ARDUINO_MSG_DELAY = 0.1
 
 # ----------------------------
 # Watchdog restart mechanism
@@ -148,7 +150,7 @@ def main():
                 for r in results:
                     for box in r.boxes:
                         cls_id = int(box.cls[0])
-                        if model.names[cls_id] == "person":
+                        if model.names[cls_id] == "Chevreuil":
                             person_box = box
                             break
                     if person_box is not None:
@@ -174,7 +176,8 @@ def main():
                     # ----------------------------
                     # Send to Arduino (if connected)
                     # ----------------------------
-                    if ser:
+                    if ser and time.time() - last_arduino_msg >= ARDUINO_MSG_DELAY:
+                        last_arduino_msg = time.time()
                         try:
                             msg = f"{yaw:.2f},{pitch:.2f}\n"
                             ser.write(msg.encode())
