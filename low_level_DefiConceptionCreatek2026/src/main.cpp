@@ -16,6 +16,17 @@
 #define RELAY1_PIN 11
 #define RELAY2_PIN 12
 
+// Control parameters
+const float Kp = 1.0;  // Proportional gain for stepper control
+
+// Tuning parameters for angle-based control
+const float STEPS_PER_MM_X = 10.0;  // Adjust based on your stepper and mechanism
+const float MAX_SPEED_X = 200.0; // Max speed in steps per second
+const float STEPS_PER_MM_Y = 10.0;  // Adjust based on your stepper and mechanism
+const float MAX_SPEED_Y = 200.0; // Max speed in steps per second
+
+const float DEADZONE = 10;              // Ignore angles smaller than this (steps)
+
 void parseCommand(String cmd);
 void moveStepperX(int targetX);
 void moveStepperY(int targetY);
@@ -27,11 +38,6 @@ StepperDriver stepperY(STEPPER_Y_DIR, STEPPER_Y_STEP, STEPPER_Y_ENABLE);
 Servo servo;
 
 int currentX = 0, currentY = 0;
-
-// Tuning parameters for angle-based control
-const float STEPS_PER_DEGREE_X = 10.0;  // Adjust based on your stepper and mechanism
-const float STEPS_PER_DEGREE_Y = 10.0;  // Adjust based on your stepper and mechanism
-const float DEADZONE = 0.5;              // Ignore angles smaller than this (degrees)
 
 void setup() {
     Serial.begin(115200);
@@ -61,7 +67,6 @@ void loop() {
 
         // Legacy position-based command format: "X100 Y200 S255 R1:1 R2:0"
         parseCommand(command);
-        
     }
 }
 
@@ -108,16 +113,44 @@ void parseCommand(String cmd) {
     if (relay2 != -1) digitalWrite(RELAY2_PIN, relay2 ? HIGH : LOW);
 
     Serial.println("Command executed: " + cmd);
+    while(Serial.available()) Serial.read();  // Clear serial buffer
 }
 
 void moveStepperX(int targetX) {
     int steps = targetX - currentX;
+    if(targetX - currentX > 0){
+        steps = 10;
+    }
+    else if(targetX - currentX < 0){
+        steps = -10;
+    }
+
+    if (abs(steps) < DEADZONE) return;  // Within deadzone, ignore
+
+    float speed = abs(steps) * Kp;
+    if (speed > MAX_SPEED_X) speed = MAX_SPEED_X;
+    if (speed < -MAX_SPEED_X) speed = -MAX_SPEED_X;
+    stepperX.setSpeed(speed);  // Ensure speed is set
+
     stepperX.step(steps);
     currentX = targetX;
 }
 
 void moveStepperY(int targetY) {
     int steps = targetY - currentY;
+    if(targetY - currentY > 0){
+        steps = 10;
+    }
+    else if(targetY - currentY < 0){
+        steps = -10;
+    }
+    if (abs(steps) < DEADZONE) return;  // Within deadzone, ignore
+
+    float speed = abs(steps) * Kp;
+    if (speed > MAX_SPEED_Y) speed = MAX_SPEED_Y;
+    if (speed < -MAX_SPEED_Y) speed = -MAX_SPEED_Y;
+    stepperY.setSpeed(speed);  // Ensure speed is set
+
     stepperY.step(steps);
     currentY = targetY;
 }

@@ -62,7 +62,7 @@ try:
 
         # Buttons (example)
         r1 = js.get_button(5)
-        r2 = js.get_button(7)
+        r2 = js.get_button(4)
 
         # Fixed speed value (adjust if needed)
         a_pressed = js.get_button(0)
@@ -79,7 +79,14 @@ try:
 
         if ser:
             ser.write(msg.encode("ascii"))
-        print(f"Sent: {msg.strip()}")
+            print(f"Sent: {msg.strip()}")
+        else:
+            print("Serial not connected. Message would be:")
+            print(msg.strip())
+
+        if ser:
+            ser.flushOutput()
+            ser.flushInput()
 
         time.sleep(LOOP_DT)
 
