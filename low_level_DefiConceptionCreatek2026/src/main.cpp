@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include <Servo.h>
-#include "StepperDriver.h"
+#include <AccelStepper.h>
 
 // Stepper motor pins (DIR and STEP)
 #define STEPPER_X_DIR 2
@@ -17,24 +17,20 @@
 #define RELAY2_PIN 12
 
 // Control parameters
-const float Kp = 1.0;  // Proportional gain for stepper control
+const float MAX_SPEED = 2000.0;        // Maximum steps per second
+const float ACCELERATION = 400.0;     // Steps per second^2
+// const float SPEED_FACTOR = 80.0;      // Speed multiplier for position difference
 
-// Tuning parameters for angle-based control
-const float STEPS_PER_MM_X = 10.0;  // Adjust based on your stepper and mechanism
-const float MAX_SPEED_X = 200.0; // Max speed in steps per second
-const float STEPS_PER_MM_Y = 10.0;  // Adjust based on your stepper and mechanism
-const float MAX_SPEED_Y = 200.0; // Max speed in steps per second
-
-const float DEADZONE = 10;              // Ignore angles smaller than this (steps)
+const float DEADZONE = 10;            // Ignore position changes smaller than this (steps)
 
 void parseCommand(String cmd);
 void moveStepperX(int targetX);
 void moveStepperY(int targetY);
 void moveServo(int angle);
 
-// Stepper driver instances (DIR pin, STEP pin, ENABLE pin)
-StepperDriver stepperX(STEPPER_X_DIR, STEPPER_X_STEP, STEPPER_X_ENABLE);
-StepperDriver stepperY(STEPPER_Y_DIR, STEPPER_Y_STEP, STEPPER_Y_ENABLE);
+// AccelStepper instances (interface type 1 = DRIVER with STEP and DIR pins)
+AccelStepper stepperX(AccelStepper::DRIVER, STEPPER_X_STEP, STEPPER_X_DIR);
+AccelStepper stepperY(AccelStepper::DRIVER, STEPPER_Y_STEP, STEPPER_Y_DIR);
 Servo servo;
 
 int currentX = 0, currentY = 0;
@@ -42,11 +38,24 @@ int currentX = 0, currentY = 0;
 void setup() {
     Serial.begin(115200);
     
-    // Initialize steppers
-    stepperX.begin();
-    stepperY.begin();
-    stepperX.setSpeed(100);  // 100 steps per second
-    stepperY.setSpeed(100);
+    // Initialize steppers with AccelStepper
+    stepperX.setMaxSpeed(MAX_SPEED);
+    stepperX.setAcceleration(ACCELERATION);
+    stepperX.setCurrentPosition(0);
+    
+    stepperY.setMaxSpeed(MAX_SPEED);
+    stepperY.setAcceleration(ACCELERATION);
+    stepperY.setCurrentPosition(0);
+    
+    // Initialize enable pins
+    if (STEPPER_X_ENABLE != 255) {
+        pinMode(STEPPER_X_ENABLE, OUTPUT);
+        digitalWrite(STEPPER_X_ENABLE, LOW);  // Enable motor (active LOW for most drivers)
+    }
+    if (STEPPER_Y_ENABLE != 255) {
+        pinMode(STEPPER_Y_ENABLE, OUTPUT);
+        digitalWrite(STEPPER_Y_ENABLE, LOW);  // Enable motor (active LOW for most drivers)
+    }
     
     // Initialize servo
     servo.attach(SERVO_PIN);
@@ -61,19 +70,23 @@ void setup() {
 }
 
 void loop() {
+    // Speed-based movement - continuously run at set speed
+    stepperX.runSpeed();
+    stepperY.runSpeed();
+    
     if (Serial.available()) {
         String command = Serial.readStringUntil('\n');
         command.trim();  // Remove whitespace/newlines
-
-        // Legacy position-based command format: "X100 Y200 S255 R1:1 R2:0"
+        
+        // Speed-based command format: "X100 Y200 S255 R1:1 R2:0" where X/Y are speeds in steps/sec
         parseCommand(command);
     }
 }
 
 void parseCommand(String cmd) {
-    int x = -999999, y = -999999, servo_val = -1, relay1 = -1, relay2 = -1;
+    int speedX = 0, speedY = 0, servo_val = -1, relay1 = -1, relay2 = -1;
     
-    // Parse format: "X100 Y200 S255 R1:1 R2:0"
+    // Parse format: "X100 Y200 S255 R1:1 R2:0" where X/Y are speed values
     int xIdx = cmd.indexOf("X");
     int yIdx = cmd.indexOf("Y");
     int sIdx = cmd.indexOf("S");
@@ -83,13 +96,13 @@ void parseCommand(String cmd) {
     if (xIdx != -1) {
         int endIdx = cmd.indexOf(' ', xIdx);
         if (endIdx == -1) endIdx = cmd.length();
-        x = cmd.substring(xIdx + 1, endIdx).toInt();
+        speedX = cmd.substring(xIdx + 1, endIdx).toInt();
     }
     
     if (yIdx != -1) {
         int endIdx = cmd.indexOf(' ', yIdx);
         if (endIdx == -1) endIdx = cmd.length();
-        y = cmd.substring(yIdx + 1, endIdx).toInt();
+        speedY = cmd.substring(yIdx + 1, endIdx).toInt();
     }
     
     if (sIdx != -1) {
@@ -106,8 +119,8 @@ void parseCommand(String cmd) {
         relay2 = cmd.substring(r2Idx + 3, r2Idx + 4).toInt();
     }
     
-    if (x != -999999) moveStepperX(x);
-    if (y != -999999) moveStepperY(y);
+    moveStepperX(speedX);
+    moveStepperY(speedY);
     if (servo_val != -1) moveServo(servo_val);
     if (relay1 != -1) digitalWrite(RELAY1_PIN, relay1 ? HIGH : LOW);
     if (relay2 != -1) digitalWrite(RELAY2_PIN, relay2 ? HIGH : LOW);
@@ -116,43 +129,26 @@ void parseCommand(String cmd) {
     while(Serial.available()) Serial.read();  // Clear serial buffer
 }
 
-void moveStepperX(int targetX) {
-    int steps = targetX - currentX;
-    if(targetX - currentX > 0){
-        steps = 10;
+void moveStepperX(int speedX) {
+    if (abs(speedX) < DEADZONE) {
+        stepperX.setSpeed(0);
+    } else {
+        // Clamp speed to max
+        if (speedX > MAX_SPEED) speedX = MAX_SPEED;
+        if (speedX < -MAX_SPEED) speedX = -MAX_SPEED;
+        stepperX.setSpeed(speedX);
     }
-    else if(targetX - currentX < 0){
-        steps = -10;
-    }
-
-    if (abs(steps) < DEADZONE) return;  // Within deadzone, ignore
-
-    float speed = abs(steps) * Kp;
-    if (speed > MAX_SPEED_X) speed = MAX_SPEED_X;
-    if (speed < -MAX_SPEED_X) speed = -MAX_SPEED_X;
-    stepperX.setSpeed(speed);  // Ensure speed is set
-
-    stepperX.step(steps);
-    currentX = targetX;
 }
 
-void moveStepperY(int targetY) {
-    int steps = targetY - currentY;
-    if(targetY - currentY > 0){
-        steps = 10;
+void moveStepperY(int speedY) {
+    if (abs(speedY) < DEADZONE) {
+        stepperY.setSpeed(0);
+    } else {
+        // Clamp speed to max
+        if (speedY > MAX_SPEED) speedY = MAX_SPEED;
+        if (speedY < -MAX_SPEED) speedY = -MAX_SPEED;
+        stepperY.setSpeed(speedY);
     }
-    else if(targetY - currentY < 0){
-        steps = -10;
-    }
-    if (abs(steps) < DEADZONE) return;  // Within deadzone, ignore
-
-    float speed = abs(steps) * Kp;
-    if (speed > MAX_SPEED_Y) speed = MAX_SPEED_Y;
-    if (speed < -MAX_SPEED_Y) speed = -MAX_SPEED_Y;
-    stepperY.setSpeed(speed);  // Ensure speed is set
-
-    stepperY.step(steps);
-    currentY = targetY;
 }
 
 void moveServo(int angle) {

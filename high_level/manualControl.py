@@ -6,10 +6,10 @@ import time
 SERIAL_PORT = "COM9"      # Change to your port (e.g. "/dev/ttyUSB0")
 BAUDRATE = 115200
 
-X_MIN, X_MAX = -1000, 1000
-Y_MIN, Y_MAX = -1000, 1000
+# X_MIN, X_MAX = -1000, 1000
+# Y_MIN, Y_MAX = -1000, 1000
 
-INCREMENT_SCALE = 5       # Position increment per loop at full stick deflection
+SPEED_SCALE = 1000       # Position increment per loop at full stick deflection
 LOOP_DT = 0.02            # 50 Hz update
 # --------------------------------------------
 
@@ -35,8 +35,8 @@ if pygame.joystick.get_count() == 0:
 js = pygame.joystick.Joystick(0)
 
 # Positions
-x_pos = 0
-y_pos = 0
+x_speed = 0
+y_speed = 0
 servo_pos = 0
 start_time = None
 
@@ -53,12 +53,12 @@ try:
         # print(f"Left Y: {left_y:.2f}, Right X: {right_x:.2f}")
 
         # Increment positions
-        x_pos += int(right_x * INCREMENT_SCALE)
-        y_pos += int(left_y * INCREMENT_SCALE)
+        x_speed = int(right_x * SPEED_SCALE)
+        y_speed = int(left_y * SPEED_SCALE)
 
         # Clamp
-        x_pos = max(X_MIN, min(X_MAX, x_pos))
-        y_pos = max(Y_MIN, min(Y_MAX, y_pos))
+        # x_speed = max(X_MIN, min(X_MAX, x_speed))
+        # y_speed = max(Y_MIN, min(Y_MAX, y_speed))
 
         # Buttons (example)
         r1 = js.get_button(5)
@@ -75,7 +75,7 @@ try:
             servo_pos = 0
 
         # Serial message
-        msg = f"X{x_pos} Y{y_pos} S{servo_pos} R1:{r1} R2:{r2}\n"
+        msg = f"X{x_speed} Y{y_speed} S{servo_pos} R1:{r1} R2:{r2}\n"
 
         if ser:
             ser.write(msg.encode("ascii"))
