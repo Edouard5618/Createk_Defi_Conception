@@ -1,0 +1,8 @@
+path: C:\Users\Edouard\Documents\Documents\Personnel\Projets_Perso_Studio\Createk_Defi_Conception\dataset          # root path
+train: images/train
+val: images/val
+
+
+nc: 1
+names:
+  0: Chevreuil
