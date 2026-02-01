@@ -3,14 +3,17 @@ import serial
 import time
 
 # ------------------ CONFIG ------------------
-SERIAL_PORT = "COM9"      # Change to your port (e.g. "/dev/ttyUSB0")
+SERIAL_PORT = "COM8"      # Change to your port (e.g. "/dev/ttyUSB0")
 BAUDRATE = 115200
 
 # X_MIN, X_MAX = -1000, 1000
 # Y_MIN, Y_MAX = -1000, 1000
 
-SPEED_SCALE = 1000       # Position increment per loop at full stick deflection
+SPEED_SCALE = 1200       # Position increment per loop at full stick deflection
 LOOP_DT = 0.02            # 50 Hz update
+
+SERVO_OPEN_VALUE = 95
+SERVO_OPEN_TIME = 0.5
 # --------------------------------------------
 
 # Serial setup
@@ -48,7 +51,7 @@ try:
         pygame.event.pump()
 
         # Read joystick axes
-        left_y = -js.get_axis(1)   # invert so up = positive
+        left_y = js.get_axis(1)   # invert so up = positive
         right_x = js.get_axis(2)
         # print(f"Left Y: {left_y:.2f}, Right X: {right_x:.2f}")
 
@@ -67,11 +70,11 @@ try:
         # Fixed speed value (adjust if needed)
         a_pressed = js.get_button(0)
         if a_pressed and servo_pos == 0:  # Only activate if servo is not already moving
-            servo_pos = 255
+            servo_pos = SERVO_OPEN_VALUE
             start_time = time.time()  # Record the start time
 
-        # Reset servo position after 3 seconds
-        if servo_pos == 255 and start_time is not None and time.time() - start_time >= 3:
+        # Reset servo position after a delay seconds
+        if servo_pos == SERVO_OPEN_VALUE and start_time is not None and time.time() - start_time >= SERVO_OPEN_TIME:
             servo_pos = 0
 
         # Serial message
