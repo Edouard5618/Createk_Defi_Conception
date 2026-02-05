@@ -10,15 +10,18 @@ from ultralytics import YOLO
 # ----------------------------
 # Configuration
 # ----------------------------
-# pretrained YOLOv8 (COCO)
-MODEL_PATH = r"C:\Users\Edouard\Documents\Documents\Personnel\Projets_Perso_Studio\Createk_Defi_Conception\runs\detect\train8\weights\best.pt"
+# pretrained YOLOv8 for person detection or custom model for deer images
+# If you chnage the model, also update model.names[cls_id] accordingly in the code below (person or Chevreuil)
+MODEL_PATH = r"yolov8n.pt"
+# MODEL_PATH = r"C:\Users\Edouard\Documents\Documents\Personnel\Projets_Perso_Studio\Createk_Defi_Conception\runs\detect\train8\weights\best.pt"
+
 SERIAL_PORT = "COM8"
 BAUDRATE = 115200
 
 H_FOV_DEG = 70.0   # horizontal field of view of camera
 V_FOV_DEG = 45.0   # vertical field of view of camera
 
-CONFIDENCE_THRESHOLD = 0.7  # minimum detection confidence
+CONFIDENCE_THRESHOLD = 0.4  # minimum detection confidence
 MAX_WATCHDOG_FAILURES = 3   # number of consecutive failures before restart
 ARDUINO_RECONNECT_INTERVAL = 5.0  # seconds between reconnection attempts
 ARDUINO_MSG_DELAY = 0.02
@@ -27,8 +30,8 @@ SERVO_TRIGGER_VALUE = 95
 SERVO_TRIGGER_DURATION = 0.5
 RELAY_1_DURATION = 10.0  # seconds
 
-X_SPEED_FACTOR = 70
-Y_SPEED_FACTOR = 70
+X_SPEED_FACTOR = 25
+Y_SPEED_FACTOR = 25
 
 # ----------------------------
 # Watchdog restart mechanism
@@ -251,16 +254,21 @@ def main():
                 # ----------------------------
                 results = model(frame, conf=CONFIDENCE_THRESHOLD, verbose=False)
 
-                # Find the first detected person
+                # Find the biggest detected person
                 person_box = None
+                max_area = 0
+
                 for r in results:
                     for box in r.boxes:
                         cls_id = int(box.cls[0])
-                        if model.names[cls_id] == "Chevreuil":
-                            person_box = box
-                            break
-                    if person_box is not None:
-                        break
+                        if model.names[cls_id] == "person":
+                            # box.xyxy = [x1, y1, x2, y2]
+                            x1, y1, x2, y2 = box.xyxy[0]
+                            area = (x2 - x1) * (y2 - y1)
+
+                            if area > max_area:
+                                max_area = area
+                                person_box = box
 
                 if person_box is not None:
                     # ----------------------------
